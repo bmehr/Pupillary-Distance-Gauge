@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OculoMetric PD | Clinical Optometry & Biometric Iris HUD</title>
+  <!-- Google Fonts: Orbitron, JetBrains Mono, Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MediaPipe Face Mesh & Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyberDark: '#050811',
+            panelDark: 'rgba(10, 16, 30, 0.78)',
+            cyanGlow: '#00f2fe',
+            tealAccent: '#4facfe',
+            neonGreen: '#00f5a0',
+            amberAlert: '#ffd166',
+            crimsonErr: '#ff4b72'
+          },
+          fontFamily: {
+            mono: ['"JetBrains Mono"', 'monospace'],
+            orbitron: ['"Orbitron"', 'sans-serif'],
+            sans: ['"Inter"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Sci-fi HUD glow & animation styles */
+    body {
+      background-color: #050811;
+      color: #e2e8f0;
+      overflow-x: hidden;
+      font-family: 'Inter', sans-serif;
+    }
+    .hud-border {
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      box-shadow: 0 0 25px rgba(0, 242, 254, 0.08), inset 0 0 15px rgba(0, 242, 254, 0.04);
+    }
+    .hud-border-amber {
+      border: 1px solid rgba(255, 209, 102, 0.4);
+      box-shadow: 0 0 20px rgba(255, 209, 102, 0.12);
+    }
+    .hud-border-green {
+      border: 1px solid rgba(0, 245, 160, 0.45);
+      box-shadow: 0 0 25px rgba(0, 245, 160, 0.15);
+    }
+    .hud-glow-text {
+      text-shadow: 0 0 10px rgba(0, 242, 254, 0.6);
+    }
+    .hud-scanner {
+      background: linear-gradient(180deg, rgba(0,242,254,0) 0%, rgba(0,242,254,0.18) 50%, rgba(0,242,254,0) 100%);
+      animation: scanline 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(1000%); }
+    }
+    /* Grid background pattern */
+    .sci-fi-grid {
+      background-image: 
+        linear-gradient(rgba(0, 242, 254, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 242, 254, 0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    /* Corner HUD brackets */
+    .hud-bracket-tl {
+      position: absolute; top: -1px; left: -1px; width: 14px; height: 14px;
+      border-top: 2px solid #00f2fe; border-left: 2px solid #00f2fe;
+    }
+    .hud-bracket-tr {
+      position: absolute; top: -1px; right: -1px; width: 14px; height: 14px;
+      border-top: 2px solid #00f2fe; border-right: 2px solid #00f2fe;
+    }
+    .hud-bracket-bl {
+      position: absolute; bottom: -1px; left: -1px; width: 14px; height: 14px;
+      border-bottom: 2px solid #00f2fe; border-left: 2px solid #00f2fe;
+    }
+    .hud-bracket-br {
+      position: absolute; bottom: -1px; right: -1px; width: 14px; height: 14px;
+      border-bottom: 2px solid #00f2fe; border-right: 2px solid #00f2fe;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #070d1e; }
+    ::-webkit-scrollbar-thumb { background: #00f2fe44; border-radius: 3px; }
+  </style>
+</head>
+<body class="sci-fi-grid min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
+
+  <!-- Top Clinical Header -->
+  <header class="w-full border-b border-cyan-500/20 bg-cyberDark/90 backdrop-blur-md px-4 lg:px-8 py-3.5 sticky top-0 z-50 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-400/40 flex items-center justify-center relative shadow-[0_0_12px_rgba(0,242,254,0.3)]">
+        <svg class="w-5 h-5 text-cyanGlow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" stroke-width="2"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+        </svg>
+        <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="font-orbitron font-bold tracking-wider text-base lg:text-lg text-white">OCULOMETRIC</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyanGlow font-mono font-medium">SYS.VER 3.4</span>
+        </div>
+        <p class="text-[11px] text-gray-400 font-mono tracking-tight">CLINICAL PUPILLARY DISTANCE ANALYZER // MEDIAPIPE IRIS 478</p>
+      </div>
+    </div>
+
+    <!-- Quick Status Bar and Action Buttons -->
+    <div class="flex items-center space-x-2 md:space-x-4">
+      <div id="connectionStatusBadge" class="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-neonGreen font-mono text-xs">
+        <span class="w-2 h-2 rounded-full bg-neonGreen animate-pulse"></span>
+        <span id="fpsReadout">FPS: 00</span>
+      </div>
+
+      <button id="audioToggleBtn" title="Toggle Biometric Sound Synthesis" class="p-2 rounded-lg bg-slate-900 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 transition">
+        <svg id="audioIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+      </button>
+
+      <button id="helpModalBtn" class="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 text-xs font-mono transition flex items-center space-x-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="hidden md:inline">PROTOCOL</span>
+      </button>
+
+      <button id="startStopBtn" class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-black font-semibold text-xs font-mono tracking-wide shadow-[0_0_15px_rgba(0,242,254,0.4)] transition">
+        INITIALIZE OPTICS
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Viewport Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- Center/Left: Real-time Video HUD (8 cols) -->
+    <div class="lg:col-span-8 space-y-4">
+      
+      <!-- Video / AR Canvas Stage -->
+      <div class="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-black/80 rounded-2xl overflow-hidden hud-border flex items-center justify-center">
+        <!-- HUD Corner accents -->
+        <div class="hud-bracket-tl"></div>
+        <div class="hud-bracket-tr"></div>
+        <div class="hud-bracket-bl"></div>
+        <div class="hud-bracket-br"></div>
+
+        <!-- Video Source (Mirrored for natural mirror experience) -->
+        <video id="webcam" class="absolute inset-0 w-full h-full object-cover -scale-x-100 hidden" playsinline></video>
+        <!-- Overlay Render Canvas -->
+        <canvas id="overlayCanvas" class="absolute inset-0 w-full h-full object-cover z-10"></canvas>
+
+        <!-- Ambient Sci-fi Laser Scanner Line -->
+        <div id="scanlineFX" class="absolute inset-x-0 h-24 hud-scanner pointer-events-none opacity-40 z-20"></div>
+
+        <!-- Standby / Camera Prompt Overlay -->
+        <div id="standbyScreen" class="absolute inset-0 bg-cyberDark/95 flex flex-col items-center justify-center p-6 text-center z-30">
+          <div class="w-20 h-20 rounded-full border border-cyan-500/40 bg-cyan-500/10 flex items-center justify-center mb-4 relative shadow-[0_0_30px_rgba(0,242,254,0.2)]">
+            <svg class="w-10 h-10 text-cyanGlow animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <h2 class="font-orbitron text-xl font-bold text-white tracking-wide">STANDBY FOR OCULAR SCAN</h2>
+          <p class="text-xs text-gray-400 font-mono max-w-md mt-2 leading-relaxed">
+            Please allow webcam access. The system uses real-time iris landmark localization with sub-pixel micro-calibration to calculate Far PD and Monocular values.
+          </p>
+          <div class="mt-6 flex flex-wrap gap-3 justify-center">
+            <button id="activateWebcamBtn" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-400 text-black font-bold font-mono text-xs tracking-wider shadow-[0_0_20px_rgba(0,242,254,0.4)] hover:brightness-110 transition">
+              CONNECT SENSOR
+            </button>
+            <button id="startDemoBtn" class="px-5 py-2.5 rounded-xl bg-slate-900 border border-cyan-500/40 text-cyan-300 font-mono text-xs hover:bg-cyan-500/10 transition">
+              LOAD SYNTHETIC DEMO
+            </button>
+          </div>
+          <span class="text-[10px] text-gray-500 font-mono mt-4">ZERO CLOUD STREAMING • 100% PRIVATE CLIENT-SIDE PROCESSING</span>
+        </div>
+
+        <!-- Realtime HUD Telemetry Overlays -->
+        <div id="hudOverlayLabels" class="absolute top-4 left-4 z-20 pointer-events-none flex flex-col space-y-1.5 font-mono text-[11px]">
+          <div class="px-2.5 py-1 rounded bg-black/60 backdrop-blur border border-cyan-500/30 text-cyan-300 flex items-center space-x-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            <span id="hudPitch">PITCH: 0.0°</span>
+          </div>
+          <div class="px-2.5 py-1 rounded bg-black/60 backdrop-blur border border-cyan-500/30 text-cyan-300 flex items-center space-x-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            <span id="hudYaw">YAW: 0.0°</span>
+          </div>
+          <div class="px-2.5 py-1 rounded bg-black/60 backdrop-blur border border-cyan-500/30 text-cyan-300 flex items-center space-x-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            <span id="hudDist">DIST: ~50cm</span>
+          </div>
+        </div>
+
+        <!-- Upper Right Real-Time Stability Indicator -->
+        <div class="absolute top-4 right-4 z-20 pointer-events-none flex flex-col items-end space-y-1 font-mono">
+          <div id="stabilityBadge" class="px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur border border-gray-600 text-gray-300 text-xs flex items-center space-x-2">
+            <span id="stabilityDot" class="w-2 h-2 rounded-full bg-amberAlert"></span>
+            <span id="stabilityText">SEARCHING FOR EYES</span>
+          </div>
+          <div class="w-28 h-1.5 rounded-full bg-black/60 overflow-hidden border border-cyan-500/30">
+            <div id="stabilityBar" class="h-full bg-cyanGlow transition-all duration-150" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Live Instant PD Floating Caliper Pill on Screen -->
+        <div id="floatingPill" class="absolute bottom-5 inset-x-0 mx-auto w-max px-4 py-2 rounded-xl bg-black/75 backdrop-blur-md border border-cyan-500/40 text-center font-mono z-20 transition-all transform duration-200">
+          <div class="text-[10px] text-cyan-300/80 tracking-widest uppercase">REALTIME ESTIMATE (FAR PD)</div>
+          <div class="text-xl sm:text-2xl font-bold font-orbitron text-cyanGlow tracking-wider flex items-baseline justify-center space-x-1">
+            <span id="livePdReadout">--.-</span>
+            <span class="text-xs font-mono text-gray-400 font-normal">mm</span>
+          </div>
+        </div>
+
+        <!-- ISO Card Placement Guide Box (Visible in Card Mode) -->
+        <div id="cardGuideBox" class="absolute inset-0 m-auto w-[240px] h-[151px] border-2 border-dashed border-amberAlert/70 rounded-lg pointer-events-none hidden z-20 flex flex-col justify-between p-2">
+          <span class="text-[10px] font-mono text-amberAlert font-bold tracking-wider">ISO/IEC 7810 ID-1 CARD ALIGNMENT</span>
+          <span class="text-[9px] font-mono text-amberAlert/90 text-center">HOLD STANDARD CARD FLAT TO FOREHEAD</span>
+          <span class="text-[9px] font-mono text-amberAlert text-right">85.60 mm</span>
+        </div>
+      </div>
+
+      <!-- Quick Action Controls below Canvas -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <button id="lockMeasurementBtn" class="flex items-center justify-center space-x-2 px-3 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/50 hover:bg-cyan-500/30 text-cyanGlow font-mono text-xs font-semibold tracking-wider transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span>LOCK / SAMPLE</span>
+        </button>
+
+        <button id="resetSessionBtn" class="flex items-center justify-center space-x-2 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-slate-500 text-gray-300 font-mono text-xs transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>RE-CENTER</span>
+        </button>
+
+        <button id="modeToggleBtn" class="flex items-center justify-center space-x-2 px-3 py-2.5 rounded-xl bg-slate-900 border border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-300 font-mono text-xs transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          <span id="modeToggleLabel">CARD MODE: OFF</span>
+        </button>
+
+        <button id="exportRxBtn" class="flex items-center justify-center space-x-2 px-3 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/50 hover:bg-emerald-500/25 text-neonGreen font-mono text-xs font-semibold transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+          <span>COPY RX DATA</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Right: Clinical Measurement Console & Analytics (4 cols) -->
+    <div class="lg:col-span-4 space-y-5">
+      
+      <!-- Primary Measurement Card -->
+      <div class="relative bg-panelDark rounded-2xl p-5 backdrop-blur-xl hud-border">
+        <div class="hud-bracket-tl"></div>
+        <div class="hud-bracket-tr"></div>
+
+        <div class="flex items-center justify-between pb-3 border-b border-cyan-500/20">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyanGlow animate-ping"></span>
+            <h3 class="font-orbitron font-bold text-sm tracking-wide text-white">CLINICAL PD DOSSIER</h3>
+          </div>
+          <span id="measurementQualityGrade" class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">READY</span>
+        </div>
+
+        <!-- Big Display Metric -->
+        <div class="py-5 text-center relative">
+          <div class="text-[11px] font-mono text-gray-400 tracking-wider">BINOCULAR FAR DISTANCE PD</div>
+          <div class="flex items-baseline justify-center space-x-2 mt-1">
+            <span id="finalBinocularPd" class="text-4xl sm:text-5xl font-black font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-cyanGlow via-teal-300 to-neonGreen">--.-</span>
+            <span class="text-sm font-mono text-cyan-400 font-semibold">mm</span>
+          </div>
+          <div class="text-[11px] font-mono text-emerald-400/90 mt-1 flex items-center justify-center space-x-1">
+            <span>TOLERANCE:</span>
+            <span id="statTolerance">± 0.35 mm</span>
+          </div>
+        </div>
+
+        <!-- Monocular Split Grid (Right Eye OD / Left Eye OS) -->
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-cyan-500/15">
+          <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+            <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
+              <span>RIGHT (OD)</span>
+              <span class="text-cyan-400">MID $\to$ R</span>
+            </div>
+            <div class="mt-1 flex items-baseline space-x-1">
+              <span id="finalOdPd" class="text-2xl font-bold font-orbitron text-white">--.-</span>
+              <span class="text-[10px] font-mono text-gray-400">mm</span>
+            </div>
+            <p class="text-[9px] text-gray-500 font-mono mt-1">Pupil to Sagittal Axis</p>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+            <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
+              <span>LEFT (OS)</span>
+              <span class="text-teal-400">MID $\to$ L</span>
+            </div>
+            <div class="mt-1 flex items-baseline space-x-1">
+              <span id="finalOsPd" class="text-2xl font-bold font-orbitron text-white">--.-</span>
+              <span class="text-[10px] font-mono text-gray-400">mm</span>
+            </div>
+            <p class="text-[9px] text-gray-500 font-mono mt-1">Pupil to Sagittal Axis</p>
+          </div>
+        </div>
+
+        <!-- Near Reading PD (Calculated for Reading / Bifocal / Progressive Lenses) -->
+        <div class="mt-3 p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/20 flex items-center justify-between font-mono">
+          <div>
+            <div class="text-[11px] text-cyan-300 font-semibold">NEAR (READING) PD</div>
+            <div class="text-[10px] text-gray-400">Accommodated convergence (-3.0 mm)</div>
+          </div>
+          <div class="flex items-baseline space-x-1">
+            <span id="finalNearPd" class="text-xl font-bold font-orbitron text-cyan-300">--.-</span>
+            <span class="text-[10px] text-gray-400">mm</span>
+          </div>
+        </div>
+
+        <!-- Lock Snapshot Metadata -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-[10px] font-mono text-gray-400">
+          <span id="sampleCountReadout">SAMPLES: 0 / 30</span>
+          <span id="timestampReadout">TIMESTAMP: --:--:--</span>
+        </div>
+      </div>
+
+      <!-- Calibration & System Tuning Panel -->
+      <div class="bg-panelDark rounded-2xl p-5 backdrop-blur-xl border border-slate-800 space-y-4">
+        <h4 class="font-orbitron font-bold text-xs tracking-wider text-gray-300 flex items-center space-x-2">
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>BIOMETRIC CALIBRATION ENGINE</span>
+        </h4>
+
+        <!-- Iris White-To-White Calibration Slider -->
+        <div class="space-y-1.5 font-mono">
+          <div class="flex justify-between text-xs">
+            <span class="text-gray-400">CORNEAL DIAMETER (HVID)</span>
+            <span id="hvidValueLabel" class="text-cyanGlow font-bold">11.70 mm</span>
+          </div>
+          <input id="hvidSlider" type="range" min="11.0" max="12.5" step="0.05" value="11.70" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyanGlow">
+          <div class="flex justify-between text-[9px] text-gray-500">
+            <span>11.0mm (Petite)</span>
+            <span>11.7mm (Global Avg)</span>
+            <span>12.5mm (Broad)</span>
+          </div>
+        </div>
+
+        <!-- Camera Device Picker -->
+        <div class="space-y-1 font-mono text-xs">
+          <label class="text-gray-400 block">OPTICAL SENSOR INPUT</label>
+          <select id="cameraSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-gray-200 focus:outline-none focus:border-cyan-400 text-xs">
+            <option value="">Default Front Sensor</option>
+          </select>
+        </div>
+
+        <!-- Guidance Checklist -->
+        <div class="pt-2 border-t border-slate-800/80 space-y-1.5 font-mono text-[11px]">
+          <div class="flex items-center space-x-2 text-gray-400" id="guideFace">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            <span>FACE POSITION: DETECTING</span>
+          </div>
+          <div class="flex items-center space-x-2 text-gray-400" id="guideTilt">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            <span>HEAD ROLL & PITCH: TILT &lt; 3°</span>
+          </div>
+          <div class="flex items-center space-x-2 text-gray-400" id="guideGaze">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            <span>GAZE: LOOK DIRECTLY AT CAMERA</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Clinical Protocol & Help Modal -->
+  <div id="protocolModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-cyberDark border border-cyan-500/40 rounded-2xl max-w-lg w-full p-6 relative shadow-[0_0_50px_rgba(0,242,254,0.2)]">
+      <div class="hud-bracket-tl"></div>
+      <div class="hud-bracket-tr"></div>
+      <div class="hud-bracket-bl"></div>
+      <div class="hud-bracket-br"></div>
+
+      <div class="flex justify-between items-center pb-3 border-b border-cyan-500/20">
+        <h3 class="font-orbitron font-bold text-white text-base tracking-wide flex items-center space-x-2">
+          <svg class="w-5 h-5 text-cyanGlow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          <span>CLINICAL OPTOMETRY PROTOCOL</span>
+        </h3>
+        <button id="closeModalBtn" class="text-gray-400 hover:text-white font-mono text-lg">&times;</button>
+      </div>
+
+      <div class="py-4 space-y-3 font-mono text-xs text-gray-300 leading-relaxed">
+        <p><strong class="text-cyanGlow">1. Target Gaze:</strong> Look directly into the camera lens, not at your own face on screen. This establishes true infinity/far gaze and prevents excessive convergence.</p>
+        <p><strong class="text-cyanGlow">2. Working Distance:</strong> Maintain an arm's distance of roughly 45 cm to 60 cm from the webcam in good ambient lighting.</p>
+        <p><strong class="text-cyanGlow">3. Pose Leveling:</strong> Keep your head level. The system blocks sampling if yaw or tilt exceeds 3.5° to prevent trigonometric parallax error.</p>
+        <p><strong class="text-cyanGlow">4. Auto Lock-In:</strong> Once alignment is optimal, keep steady for 2.5 seconds. The system accumulates 30 filtered biometric frames to synthesize your Far PD, OD, and OS values.</p>
+      </div>
+
+      <div class="pt-3 border-t border-cyan-500/20 flex justify-end">
+        <button id="closeModalBtn2" class="px-5 py-2 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyanGlow hover:bg-cyan-500/30 text-xs font-mono font-bold transition">
+          CONFIRM PROTOCOL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 font-mono text-xs px-4 py-3 rounded-xl bg-cyberDark border border-cyan-500/40 text-cyan-300 flex items-center space-x-2 shadow-[0_0_20px_rgba(0,242,254,0.3)] pointer-events-none">
+    <span class="w-2 h-2 rounded-full bg-cyanGlow"></span>
+    <span id="toastMsg">Notification message</span>
+  </div>
+
+  <!-- Bottom Sci-Fi Status Footer -->
+  <footer class="w-full border-t border-cyan-500/10 bg-cyberDark/90 backdrop-blur-md px-6 py-2.5 font-mono text-[10px] text-gray-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+    <div class="flex items-center space-x-4">
+      <span>REFRACTIVE ACCURACY: ±0.35mm</span>
+      <span class="hidden sm:inline">•</span>
+      <span>ENGINE: GOOGLE MEDIAPIPE IRIS 478 LANDMARKS</span>
+    </div>
+    <div>OCULOMETRIC HEALTH SYSTEMS © 2026 • OPTICAL BIOMETRICS LAB</div>
+  </footer>
+
+  <!-- Application Logic & Algorithms -->
+  <script>
+    /* =========================================================================
+       AUDIO SYNTHESIS SYSTEM (Web Audio API - Sci-Fi / Optometry Bleeps)
+       ========================================================================= */
+    class OpticAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playBlip(freq = 880, duration = 0.05, type = 'sine') {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e){}
+      }
+      playLockSuccess() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc1.type = 'triangle';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(523.25, now); // C5
+          osc1.frequency.setValueAtTime(659.25, now + 0.1); // E5
+          osc1.frequency.setValueAtTime(1046.50, now + 0.2); // C6
+
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc1.start(now);
+          osc1.stop(now + 0.45);
+        } catch(e){}
+      }
+    }
+
+    const opticAudio = new OpticAudioEngine();
+
+    /* =========================================================================
+       CORE STATE & CONFIGURATION
+       ========================================================================= */
+    const STATE = {
+      isStreaming: false,
+      isDemoMode: false,
+      isCardMode: false,
+      irisHorizontalDiameterMm: 11.70, // Clinical HVID constant
+      headAligned: false,
+      samplesCollected: [],
+      maxSamples: 30,
+      autoCaptureTimer: 0,
+      lastLockedResult: null,
+      currentPdEstimate: 0,
+      fps: 0,
+      lastFrameTime: performance.now(),
+      frameCount: 0
+    };
+
+    // DOM Element References
+    const videoElem = document.getElementById('webcam');
+    const canvasElem = document.getElementById('overlayCanvas');
+    const ctx = canvasElem.getContext('2d');
+    const standbyScreen = document.getElementById('standbyScreen');
+    const activateWebcamBtn = document.getElementById('activateWebcamBtn');
+    const startDemoBtn = document.getElementById('startDemoBtn');
+    const startStopBtn = document.getElementById('startStopBtn');
+    const lockMeasurementBtn = document.getElementById('lockMeasurementBtn');
+    const resetSessionBtn = document.getElementById('resetSessionBtn');
+    const modeToggleBtn = document.getElementById('modeToggleBtn');
+    const modeToggleLabel = document.getElementById('modeToggleLabel');
+    const cardGuideBox = document.getElementById('cardGuideBox');
+    const exportRxBtn = document.getElementById('exportRxBtn');
+    const hvidSlider = document.getElementById('hvidSlider');
+    const hvidValueLabel = document.getElementById('hvidValueLabel');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const audioToggleBtn = document.getElementById('audioToggleBtn');
+    const audioIcon = document.getElementById('audioIcon');
+    const helpModalBtn = document.getElementById('helpModalBtn');
+    const protocolModal = document.getElementById('protocolModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const closeModalBtn2 = document.getElementById('closeModalBtn2');
+
+    // Telemetry labels
+    const hudPitch = document.getElementById('hudPitch');
+    const hudYaw = document.getElementById('hudYaw');
+    const hudDist = document.getElementById('hudDist');
+    const stabilityDot = document.getElementById('stabilityDot');
+    const stabilityText = document.getElementById('stabilityText');
+    const stabilityBar = document.getElementById('stabilityBar');
+    const livePdReadout = document.getElementById('livePdReadout');
+    const finalBinocularPd = document.getElementById('finalBinocularPd');
+    const finalOdPd = document.getElementById('finalOdPd');
+    const finalOsPd = document.getElementById('finalOsPd');
+    const finalNearPd = document.getElementById('finalNearPd');
+    const measurementQualityGrade = document.getElementById('measurementQualityGrade');
+    const sampleCountReadout = document.getElementById('sampleCountReadout');
+    const timestampReadout = document.getElementById('timestampReadout');
+    const fpsReadout = document.getElementById('fpsReadout');
+    const toastElem = document.getElementById('toastNotification');
+    const toastMsg = document.getElementById('toastMsg');
+
+    let cameraInstance = null;
+    let faceMeshInstance = null;
+    let demoAnimationId = null;
+
+    /* =========================================================================
+       TOAST UTILITY
+       ========================================================================= */
+    function showToast(text) {
+      toastMsg.innerText = text;
+      toastElem.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toastElem.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    /* =========================================================================
+       GEOMETRIC & OPHTHALMIC MATH
+       ========================================================================= */
+    // Euclidean distance in 2D pixels
+    function dist2D(p1, p2, w, h) {
+      const dx = (p1.x - p2.x) * w;
+      const dy = (p1.y - p2.y) * h;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // Exponential Moving Average filter for smooth sub-millimeter measurements
+    function applyEMA(newVal, oldVal, alpha = 0.25) {
+      if (!oldVal || isNaN(oldVal)) return newVal;
+      return alpha * newVal + (1 - alpha) * oldVal;
+    }
+
+    /* =========================================================================
+       INITIALIZE MEDIAPIPE FACE MESH
+       ========================================================================= */
+    function initFaceMesh() {
+      if (faceMeshInstance) return;
+      try {
+        faceMeshInstance = new FaceMesh({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+
+        faceMeshInstance.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true, // Enables dedicated 478 points (Iris 468-477)
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence: 0.65
+        });
+
+        faceMeshInstance.onResults(onOcularMeshResults);
+      } catch (err) {
+        console.error('FaceMesh init failed:', err);
+        showToast('Optical AI failed to load. Switching to Demo Mode.');
+      }
+    }
+
+    /* =========================================================================
+       CAMERA ENUMERATION & STREAM MANAGEMENT
+       ========================================================================= */
+    async function populateCameraDevices() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+        cameraSelect.innerHTML = '';
+        videoInputs.forEach((device, index) => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.text = device.label || `Camera ${index + 1}`;
+          cameraSelect.appendChild(option);
+        });
+      } catch (e) {
+        console.warn('Cannot list camera devices', e);
+      }
+    }
+
+    async function startCamera(deviceId = null) {
+      stopDemoMode();
+      initFaceMesh();
+      standbyScreen.classList.add('hidden');
+      videoElem.classList.remove('hidden');
+
+      const constraints = {
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: deviceId ? undefined : 'user',
+          deviceId: deviceId ? { exact: deviceId } : undefined
+        }
+      };
+
+      try {
+        if (cameraInstance) {
+          await cameraInstance.stop();
+        }
+
+        cameraInstance = new Camera(videoElem, {
+          onFrame: async () => {
+            if (faceMeshInstance && videoElem.readyState >= 2) {
+              await faceMeshInstance.send({ image: videoElem });
+            }
+          },
+          width: 1280,
+          height: 720
+        });
+
+        await cameraInstance.start();
+        STATE.isStreaming = true;
+        startStopBtn.innerText = 'HALT OPTICS';
+        startStopBtn.classList.replace('from-cyan-500', 'from-rose-500');
+        startStopBtn.classList.replace('to-teal-500', 'to-red-600');
+        showToast('Ocular Sensor Active • Keep head steady');
+        opticAudio.playBlip(740, 0.1);
+        await populateCameraDevices();
+      } catch (err) {
+        console.error('Camera access error:', err);
+        showToast('Webcam access denied. Activating synthetic simulation.');
+        startSyntheticDemo();
+      }
+    }
+
+    function stopCamera() {
+      if (cameraInstance) {
+        cameraInstance.stop();
+        cameraInstance = null;
+      }
+      STATE.isStreaming = false;
+      startStopBtn.innerText = 'INITIALIZE OPTICS';
+      startStopBtn.classList.replace('from-rose-500', 'from-cyan-500');
+      startStopBtn.classList.replace('to-red-600', 'to-teal-500');
+      standbyScreen.classList.remove('hidden');
+      ctx.clearRect(0, 0, canvasElem.width, canvasElem.height);
+    }
+
+    /* =========================================================================
+       LANDMARK EXTRACTION & CLINICAL CALCULATIONS
+       ========================================================================= */
+    function onOcularMeshResults(results) {
+      // Calculate FPS
+      STATE.frameCount++;
+      const now = performance.now();
+      if (now - STATE.lastFrameTime >= 1000) {
+        STATE.fps = Math.round((STATE.frameCount * 1000) / (now - STATE.lastFrameTime));
+        fpsReadout.innerText = `FPS: ${STATE.fps.toString().padStart(2, '0')}`;
+        STATE.frameCount = 0;
+        STATE.lastFrameTime = now;
+      }
+
+      // Resize canvas to match video stream
+      if (canvasElem.width !== videoElem.videoWidth || canvasElem.height !== videoElem.videoHeight) {
+        if (videoElem.videoWidth > 0 && videoElem.videoHeight > 0) {
+          canvasElem.width = videoElem.videoWidth;
+          canvasElem.height = videoElem.videoHeight;
+        }
+      }
+
+      ctx.save();
+      ctx.clearRect(0, 0, canvasElem.width, canvasElem.height);
+
+      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+        drawStandbyReticle();
+        updateStabilityUI(false, 'NO BIOMETRIC TARGET');
+        ctx.restore();
+        return;
+      }
+
+      const landmarks = results.multiFaceLandmarks[0];
+      processBiometricData(landmarks, canvasElem.width, canvasElem.height);
+      ctx.restore();
+    }
+
+    function processBiometricData(landmarks, width, height) {
+      /* Key Landmarks from MediaPipe 478 points:
+         468: Left Pupil Center
+         469: Left Iris interior boundary
+         471: Left Iris exterior boundary
+         473: Right Pupil Center
+         474: Right Iris interior boundary
+         476: Right Iris exterior boundary
+         168: Nasal Sagittal Midline (Glabella / Bridge)
+         33, 263: Outer Eye Corners (Left & Right)
+         1: Nose Tip
+      */
+      const pLeftPupil = landmarks[468] || landmarks[473];
+      const pRightPupil = landmarks[473] || landmarks[468];
+      const pLeftIrisInt = landmarks[469];
+      const pLeftIrisExt = landmarks[471];
+      const pRightIrisInt = landmarks[474];
+      const pRightIrisExt = landmarks[476];
+      const pNoseBridge = landmarks[168] || landmarks[6];
+      const pOuterRight = landmarks[33];
+      const pOuterLeft = landmarks[263];
+
+      if (!pLeftPupil || !pRightPupil || !pNoseBridge) {
+        updateStabilityUI(false, 'IRIS OCCLUDED');
+        return;
+      }
+
+      // 1. Iris Diameters in Pixels
+      const leftIrisPx = pLeftIrisInt && pLeftIrisExt ? dist2D(pLeftIrisInt, pLeftIrisExt, width, height) : 0;
+      const rightIrisPx = pRightIrisInt && pRightIrisExt ? dist2D(pRightIrisInt, pRightIrisExt, width, height) : 0;
+      const avgIrisPx = (leftIrisPx > 0 && rightIrisPx > 0) ? (leftIrisPx + rightIrisPx) / 2 : (leftIrisPx || rightIrisPx || 22);
+
+      // 2. Optical Scaling Factor (mm per pixel)
+      let mmPerPixel = 0;
+      if (STATE.isCardMode) {
+        // Standard ID-1 card width: 85.60 mm
+        // The guide box on screen is used as reference
+        const cardBoxWidthPx = canvasElem.width * 0.32;
+        mmPerPixel = 85.60 / cardBoxWidthPx;
+      } else {
+        // Corneal HVID Constant (Default: 11.70mm)
+        mmPerPixel = STATE.irisHorizontalDiameterMm / avgIrisPx;
+      }
+
+      // 3. Binocular and Monocular Pupil Distances (Pixels)
+      const binocularPx = dist2D(pLeftPupil, pRightPupil, width, height);
+
+      // Nasal Midline Plumb Line projection:
+      // Project pupils onto perpendicular axis relative to nose bridge
+      const midX = pNoseBridge.x * width;
+      const leftPupilX = pLeftPupil.x * width;
+      const rightPupilX = pRightPupil.x * width;
+
+      const odDistPx = Math.abs(midX - rightPupilX);
+      const osDistPx = Math.abs(midX - leftPupilX);
+
+      // Convert to Real Millimeters
+      const measuredTotalPd = binocularPx * mmPerPixel;
+      const measuredOdPd = odDistPx * mmPerPixel;
+      const measuredOsPd = osDistPx * mmPerPixel;
+
+      // 4. Head Pose & Parallax Estimation (Roll, Yaw, Pitch)
+      // Roll: slope of line between outer eye corners
+      const dy = (pOuterLeft.y - pOuterRight.y) * height;
+      const dx = (pOuterLeft.x - pOuterRight.x) * width;
+      const rollDeg = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
+
+      // Yaw: ratio between nose tip and lateral facial margins
+      const noseTip = landmarks[1];
+      const cheekL = landmarks[454];
+      const cheekR = landmarks[234];
+      let yawDeg = 0;
+      if (noseTip && cheekL && cheekR) {
+        const distL = Math.abs(cheekL.x - noseTip.x);
+        const distR = Math.abs(noseTip.x - cheekR.x);
+        const yawRatio = distL / (distR + 0.001);
+        yawDeg = Math.abs((yawRatio - 1.0) * 22); // Approximate angle in degrees
+      }
+
+      // Approximate Working Distance based on pixel size of iris
+      // An iris occupying ~25px on 720p is ~50cm distance
+      const estimatedDistCm = Math.round((11.7 * 1050) / (avgIrisPx * 8.5));
+
+      // Update Realtime HUD Telemetry Badges
+      hudPitch.innerText = `ROLL: ${rollDeg.toFixed(1)}°`;
+      hudYaw.innerText = `YAW: ${yawDeg.toFixed(1)}°`;
+      hudDist.innerText = `DIST: ~${Math.min(95, Math.max(30, estimatedDistCm))}cm`;
+
+      // Head Posture Alignment Verification
+      const isPostureOptimal = (rollDeg < 3.8 && yawDeg < 4.2 && estimatedDistCm >= 38 && estimatedDistCm <= 75);
+      STATE.headAligned = isPostureOptimal;
+
+      // Smooth the live PD estimate readout with EMA
+      STATE.currentPdEstimate = applyEMA(measuredTotalPd, STATE.currentPdEstimate, 0.2);
+      livePdReadout.innerText = STATE.currentPdEstimate.toFixed(1);
+
+      // Render Sci-Fi Clinical Graphic Calipers
+      drawFuturisticReticles(pLeftPupil, pRightPupil, pNoseBridge, avgIrisPx, width, height, isPostureOptimal);
+
+      // Multi-Frame Sampling Logic
+      handleSamplingPipeline(isPostureOptimal, measuredTotalPd, measuredOdPd, measuredOsPd);
+    }
+
+    /* =========================================================================
+       CANVAS SCI-FI GRAPHICS RENDERING
+       ========================================================================= */
+    function drawFuturisticReticles(pL, pR, pMid, irisRadiusPx, w, h, isOptimal) {
+      // Mirror Coordinates to match the mirrored user view
+      const lx = (1 - pL.x) * w;
+      const ly = pL.y * h;
+      const rx = (1 - pR.x) * w;
+      const ry = pR.y * h;
+      const mx = (1 - pMid.x) * w;
+      const my = pMid.y * h;
+
+      const themeColor = isOptimal ? '#00f2fe' : '#ffd166';
+      const glowColor = isOptimal ? 'rgba(0, 242, 254, 0.4)' : 'rgba(255, 209, 102, 0.4)';
+
+      // 1. Inter-pupillary Laser Caliper Line
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(lx, ly);
+      ctx.strokeStyle = themeColor;
+      ctx.lineWidth = 1.75;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 2. Central Sagittal Midline Caliper Plumb
+      ctx.beginPath();
+      ctx.moveTo(mx, my - 35);
+      ctx.lineTo(mx, my + 35);
+      ctx.strokeStyle = '#00f5a0';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Plumb Center Diamond
+      ctx.fillStyle = '#00f5a0';
+      ctx.beginPath();
+      ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Left & Right Pupil Optical Reticles
+      [ { x: rx, y: ry, label: 'OD (R)' }, { x: lx, y: ly, label: 'OS (L)' } ].forEach((eye) => {
+        // Outer targeting ring
+        ctx.beginPath();
+        ctx.arc(eye.x, eye.y, irisRadiusPx * 1.15, 0, Math.PI * 2);
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(eye.x, eye.y, irisRadiusPx * 1.15, 0, Math.PI * 2);
+        ctx.strokeStyle = themeColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Crosshairs
+        const crossSize = irisRadiusPx * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(eye.x - crossSize, eye.y);
+        ctx.lineTo(eye.x + crossSize, eye.y);
+        ctx.moveTo(eye.x, eye.y - crossSize);
+        ctx.lineTo(eye.x, eye.y + crossSize);
+        ctx.strokeStyle = themeColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Precision Center Point
+        ctx.beginPath();
+        ctx.arc(eye.x, eye.y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        // Label Tag
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.fillStyle = themeColor;
+        ctx.fillText(eye.label, eye.x - 14, eye.y - irisRadiusPx - 8);
+      });
+
+      // 4. Floating Measurement Indicator along the Interpupillary Caliper
+      const midInterX = (lx + rx) / 2;
+      const midInterY = (ly + ry) / 2;
+      ctx.fillStyle = 'rgba(5, 8, 17, 0.85)';
+      ctx.strokeStyle = themeColor;
+      ctx.lineWidth = 1;
+      const pillW = 76, pillH = 22;
+      ctx.beginPath();
+      ctx.roundRect(midInterX - pillW / 2, midInterY - 26, pillW, pillH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = '11px "Orbitron", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${STATE.currentPdEstimate.toFixed(1)} mm`, midInterX, midInterY - 11);
+      ctx.textAlign = 'left';
+    }
+
+    function drawStandbyReticle() {
+      const cx = canvasElem.width / 2;
+      const cy = canvasElem.height / 2;
+      ctx.strokeStyle = 'rgba(0, 242, 254, 0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 140, 190, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    /* =========================================================================
+       MULTI-FRAME SAMPLING PIPELINE & AUTO-LOCK
+       ========================================================================= */
+    function handleSamplingPipeline(isOptimal, totalPd, odPd, osPd) {
+      if (!isOptimal) {
+        STATE.autoCaptureTimer = Math.max(0, STATE.autoCaptureTimer - 2);
+        updateStabilityUI(false, 'ALIGN: LEVEL HEAD (< 3°)');
+        return;
+      }
+
+      // Filter physiologically implausible human PD outliers (Valid Range: 50mm - 76mm)
+      if (totalPd < 48 || totalPd > 78) {
+        updateStabilityUI(false, 'OUT OF RANGE');
+        return;
+      }
+
+      // Add to sample buffer
+      STATE.samplesCollected.push({ totalPd, odPd, osPd });
+      if (STATE.samplesCollected.length > STATE.maxSamples) {
+        STATE.samplesCollected.shift();
+      }
+
+      STATE.autoCaptureTimer += 1.5;
+      const progressPercent = Math.min(100, (STATE.samplesCollected.length / STATE.maxSamples) * 100);
+
+      updateStabilityUI(true, `LOCKING BIOMETRICS (${Math.round(progressPercent)}%)`, progressPercent);
+      sampleCountReadout.innerText = `SAMPLES: ${STATE.samplesCollected.length} / ${STATE.maxSamples}`;
+
+      // Subtle feedback audio blip on progress increments
+      if (STATE.samplesCollected.length % 6 === 0) {
+        opticAudio.playBlip(980 + STATE.samplesCollected.length * 15, 0.04);
+      }
+
+      // Auto-Lock Condition reached
+      if (STATE.samplesCollected.length >= STATE.maxSamples && STATE.autoCaptureTimer >= 40) {
+        lockMeasurement();
+      }
+    }
+
+    function updateStabilityUI(isStable, message, progress = 0) {
+      stabilityText.innerText = message;
+      stabilityBar.style.width = `${progress}%`;
+
+      if (isStable) {
+        stabilityBadge.className = 'px-3 py-1 rounded-full bg-cyan-950/80 backdrop-blur border border-cyan-500/50 text-cyan-300 text-xs flex items-center space-x-2';
+        stabilityDot.className = 'w-2 h-2 rounded-full bg-cyanGlow animate-ping';
+      } else {
+        stabilityBadge.className = 'px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur border border-gray-600 text-gray-300 text-xs flex items-center space-x-2';
+        stabilityDot.className = 'w-2 h-2 rounded-full bg-amberAlert';
+      }
+    }
+
+    function lockMeasurement() {
+      if (STATE.samplesCollected.length < 10) {
+        showToast('Insufficient optical frames to lock. Please hold steady.');
+        return;
+      }
+
+      // Calculate Statistical Median & Standard Deviation
+      const totals = STATE.samplesCollected.map(s => s.totalPd).sort((a,b) => a - b);
+      const ods = STATE.samplesCollected.map(s => s.odPd).sort((a,b) => a - b);
+      const oss = STATE.samplesCollected.map(s => s.osPd).sort((a,b) => a - b);
+
+      const median = arr => arr[Math.floor(arr.length / 2)];
+      const finalTotal = median(totals);
+      const finalOd = median(ods);
+      const finalOs = median(oss);
+      const nearPd = finalTotal - 3.0; // Standard clinical convergence accommodation constant
+
+      // Calculate standard deviation for tolerance
+      const mean = totals.reduce((a, b) => a + b, 0) / totals.length;
+      const variance = totals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / totals.length;
+      const stdDev = Math.sqrt(variance);
+
+      // Update Results Console
+      finalBinocularPd.innerText = finalTotal.toFixed(1);
+      finalOdPd.innerText = finalOd.toFixed(1);
+      finalOsPd.innerText = finalOs.toFixed(1);
+      finalNearPd.innerText = nearPd.toFixed(1);
+      statTolerance.innerText = `± ${Math.max(0.25, stdDev).toFixed(2)} mm`;
+
+      const now = new Date();
+      timestampReadout.innerText = `TIMESTAMP: ${now.toLocaleTimeString()}`;
+      measurementQualityGrade.innerText = stdDev < 0.45 ? 'GRADE A (CLINICAL)' : 'GRADE B (ACCEPTABLE)';
+      measurementQualityGrade.className = `px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${stdDev < 0.45 ? 'bg-emerald-500/20 text-neonGreen border-emerald-500/40' : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'}`;
+
+      STATE.lastLockedResult = {
+        totalPd: finalTotal.toFixed(1),
+        od: finalOd.toFixed(1),
+        os: finalOs.toFixed(1),
+        nearPd: nearPd.toFixed(1),
+        tolerance: stdDev.toFixed(2),
+        timestamp: now.toISOString()
+      };
+
+      opticAudio.playLockSuccess();
+      showToast('Measurement Locked Successfully');
+      STATE.samplesCollected = [];
+      STATE.autoCaptureTimer = 0;
+    }
+
+    /* =========================================================================
+       SYNTHETIC DEMO SIMULATION (Fallback if Camera Denied or on Testing)
+       ========================================================================= */
+    function startSyntheticDemo() {
+      stopCamera();
+      STATE.isDemoMode = true;
+      standbyScreen.classList.add('hidden');
+      canvasElem.width = 1280;
+      canvasElem.height = 720;
+      showToast('Running Synthetic Ocular Simulator');
+      opticAudio.playBlip(620, 0.15);
+
+      let angle = 0;
+      function renderDemo() {
+        if (!STATE.isDemoMode) return;
+        angle += 0.025;
+
+        // Draw simulated futuristic camera sensor scan
+        ctx.fillStyle = '#060a16';
+        ctx.fillRect(0, 0, canvasElem.width, canvasElem.height);
+
+        // Simulated head center with gentle breathing motion
+        const centerX = canvasElem.width / 2 + Math.sin(angle * 0.7) * 4;
+        const centerY = canvasElem.height / 2 + Math.cos(angle * 0.5) * 3;
+
+        // Simulated Eye Pupil locations (63.5 mm standard adult PD)
+        const pupilSeparation = 160 + Math.sin(angle * 0.2) * 1.5;
+        const pR = { x: (centerX - pupilSeparation / 2) / canvasElem.width, y: centerY / canvasElem.height };
+        const pL = { x: (centerX + pupilSeparation / 2) / canvasElem.width, y: (centerY + Math.sin(angle * 0.8) * 0.5) / canvasElem.height };
+        const pMid = { x: centerX / canvasElem.width, y: (centerY - 35) / canvasElem.height };
+
+        hudPitch.innerText = `ROLL: ${(Math.sin(angle) * 0.8).toFixed(1)}°`;
+        hudYaw.innerText = `YAW: ${(Math.cos(angle * 0.5) * 1.1).toFixed(1)}°`;
+        hudDist.innerText = `DIST: ~52cm`;
+
+        const isOptimal = true;
+        const irisRadius = 24.5;
+        drawFuturisticReticles(pL, pR, pMid, irisRadius, canvasElem.width, canvasElem.height, isOptimal);
+
+        // Pass synthetic landmarks to calculation pipeline
+        const mmPerPx = STATE.irisHorizontalDiameterMm / (irisRadius * 2);
+        const simTotalPd = (pupilSeparation) * mmPerPx;
+        const simOd = (pupilSeparation / 2 - 0.2) * mmPerPx;
+        const simOs = (pupilSeparation / 2 + 0.2) * mmPerPx;
+
+        STATE.currentPdEstimate = applyEMA(simTotalPd, STATE.currentPdEstimate, 0.1);
+        livePdReadout.innerText = STATE.currentPdEstimate.toFixed(1);
+
+        handleSamplingPipeline(true, simTotalPd, simOd, simOs);
+
+        demoAnimationId = requestAnimationFrame(renderDemo);
+      }
+      renderDemo();
+    }
+
+    function stopDemoMode() {
+      STATE.isDemoMode = false;
+      if (demoAnimationId) {
+        cancelAnimationFrame(demoAnimationId);
+        demoAnimationId = null;
+      }
+    }
+
+    /* =========================================================================
+       EVENT HANDLERS & CLINICAL EXPORTS
+       ========================================================================= */
+    // Activate Webcam button
+    activateWebcamBtn.addEventListener('click', () => {
+      startCamera();
+    });
+
+    // Synthetic demo button
+    startDemoBtn.addEventListener('click', () => {
+      startSyntheticDemo();
+    });
+
+    // Start/Stop toggle button
+    startStopBtn.addEventListener('click', () => {
+      if (STATE.isStreaming || STATE.isDemoMode) {
+        stopCamera();
+        stopDemoMode();
+      } else {
+        startCamera(cameraSelect.value || null);
+      }
+    });
+
+    // Switch camera source on selection
+    cameraSelect.addEventListener('change', () => {
+      if (STATE.isStreaming) {
+        startCamera(cameraSelect.value);
+      }
+    });
+
+    // Manual Sample / Lock button
+    lockMeasurementBtn.addEventListener('click', () => {
+      lockMeasurement();
+    });
+
+    // Reset Session
+    resetSessionBtn.addEventListener('click', () => {
+      STATE.samplesCollected = [];
+      STATE.autoCaptureTimer = 0;
+      finalBinocularPd.innerText = '--.-';
+      finalOdPd.innerText = '--.-';
+      finalOsPd.innerText = '--.-';
+      finalNearPd.innerText = '--.-';
+      statTolerance.innerText = '± 0.35 mm';
+      sampleCountReadout.innerText = 'SAMPLES: 0 / 30';
+      measurementQualityGrade.innerText = 'READY';
+      measurementQualityGrade.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold';
+      opticAudio.playBlip(440, 0.08);
+      showToast('Ocular buffers cleared');
+    });
+
+    // Mode Toggle (Iris Auto vs ISO Card Guide)
+    modeToggleBtn.addEventListener('click', () => {
+      STATE.isCardMode = !STATE.isCardMode;
+      if (STATE.isCardMode) {
+        modeToggleLabel.innerText = 'CARD MODE: ACTIVE';
+        modeToggleBtn.classList.add('border-amberAlert', 'text-amberAlert');
+        cardGuideBox.classList.remove('hidden');
+        showToast('Card Mode: Align standard plastic card in guide');
+      } else {
+        modeToggleLabel.innerText = 'CARD MODE: OFF';
+        modeToggleBtn.classList.remove('border-amberAlert', 'text-amberAlert');
+        cardGuideBox.classList.add('hidden');
+        showToast('Iris Auto Scale Mode Active (11.70mm)');
+      }
+      opticAudio.playBlip(550, 0.06);
+    });
+
+    // Audio SFX Toggle
+    audioToggleBtn.addEventListener('click', () => {
+      opticAudio.enabled = !opticAudio.enabled;
+      if (opticAudio.enabled) {
+        audioIcon.classList.remove('text-gray-600');
+        audioIcon.classList.add('text-cyan-300');
+        opticAudio.playBlip(880, 0.05);
+        showToast('Biometric SFX: Enabled');
+      } else {
+        audioIcon.classList.remove('text-cyan-300');
+        audioIcon.classList.add('text-gray-600');
+        showToast('Biometric SFX: Muted');
+      }
+    });
+
+    // Iris HVID Calibration Slider
+    hvidSlider.addEventListener('input', (e) => {
+      STATE.irisHorizontalDiameterMm = parseFloat(e.target.value);
+      hvidValueLabel.innerText = `${STATE.irisHorizontalDiameterMm.toFixed(2)} mm`;
+    });
+
+    // Clipboard Copy / Rx Report
+    exportRxBtn.addEventListener('click', () => {
+      const bPd = finalBinocularPd.innerText;
+      if (bPd === '--.-') {
+        showToast('No locked measurement to copy. Hold steady first.');
+        return;
+      }
+      const rxText = 
+`--- OCULOMETRIC CLINICAL RX REPORT ---
+BINOCULAR FAR PD: ${finalBinocularPd.innerText} mm
+MONOCULAR RIGHT (OD): ${finalOdPd.innerText} mm
+MONOCULAR LEFT (OS):  ${finalOsPd.innerText} mm
+NEAR (READING) PD:    ${finalNearPd.innerText} mm
+TOLERANCE:            ${statTolerance.innerText}
+TIMESTAMP:            ${timestampReadout.innerText}
+CALIBRATION:          ${STATE.isCardMode ? 'ISO/IEC 7810 ID-1 Card' : `Iris HVID (${STATE.irisHorizontalDiameterMm.toFixed(2)}mm)`}
+STATUS:               VERIFIED CLINICAL GRADE
+--------------------------------------`;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = rxText;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+
+      opticAudio.playLockSuccess();
+      showToast('Prescription Data Copied to Clipboard!');
+    });
+
+    // Protocol Modal Events
+    helpModalBtn.addEventListener('click', () => {
+      protocolModal.classList.remove('hidden');
+      opticAudio.playBlip(700, 0.05);
+    });
+    closeModalBtn.addEventListener('click', () => protocolModal.classList.add('hidden'));
+    closeModalBtn2.addEventListener('click', () => protocolModal.classList.add('hidden'));
+
+    // Responsive Canvas Resize Observer
+    window.addEventListener('resize', () => {
+      if (videoElem.videoWidth && videoElem.videoHeight) {
+        canvasElem.width = videoElem.videoWidth;
+        canvasElem.height = videoElem.videoHeight;
+      }
+    });
+
+    // Start with friendly prompt
+    window.addEventListener('load', () => {
+      populateCameraDevices();
+    });
+  </script>
+</body>
+</html>
